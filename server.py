@@ -16,8 +16,8 @@ DB_FILE = "afix_blockchain.db"
 MASTER_TON_WALLET = "UQAQbW_kDwLvTaqnZsM6U8aU46oVA7vEDMbChOwTC719Hv4N"
 AFIX_PRICE_TOMAN = 10000  # هر AFIX معادل ۱۰,۰۰۰ تومان
 
-# آیدی تلگرامی ادمین کل (برای دسترسی به پنل مدیریت)
-ADMIN_TELEGRAM_IDS = ["YOUR_ADMIN_TELEGRAM_ID_HERE"] # آیدی عددی تلگرام خودت را اینجا بگذار
+# آیدی تلگرامی ادمین کل (ثبت‌شده برای شما)
+ADMIN_TELEGRAM_IDS = ["8443938939"]
 
 def init_db():
     """ساخت جداول پایگاه داده در صورت عدم وجود"""
