@@ -1,3 +1,2 @@
-# AFIX Core Standard Libraries
-# Note: Core uses built-in Python standard libraries (hashlib, json, time)
-
+Flask==3.0.2
+requests==2.31.0
