@@ -1,1 +1,1 @@
-worker: python afix_core.py
+web: python server.py
