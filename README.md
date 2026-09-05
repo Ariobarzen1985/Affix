@@ -1,29 +1,28 @@
-# ⚡ AFIX Network (AFIX)
+# ⚡ AFIX Network: A Peer-to-Peer Electronic Cash Infrastructure
 
-> **Autonomous, Ultra-Fast, and Mobile-Optimized Blockchain Infrastructure**  
-> Created by **Ariobarzan**
-
----
-
-## 📌 Overview
-AFIX Network is a decentralized cryptographic currency built with Python and SHA-256 dual-layer security. It features an autonomous dynamic difficulty adjustment and a halving algorithm designed for long-term scarcity and sustainability.
-
-* **Coin Name:** AFIX
-* **Symbol:** AFIX
-* **Max Supply:** 21,000,000 AFIX
-* **Genesis Creator Balance:** 1,100,000 AFIX (Ariobarzan Wallet)
-* **Market Reserve Vault:** 10,000,000 AFIX (Permanently Locked)
-* **Initial Block Reward:** 5,000 AFIX
-* **Consensus Algorithm:** Proof of Work (Mobile & CPU Optimized)
+> **An Autonomous, Lightweight, and Cryptographically Secure Blockchain Protocol**
 
 ---
 
-## 🚀 Quick Start & Installation
+## Abstract
+AFIX Network is a decentralized, peer-to-peer cryptographic ledger designed to facilitate high-throughput, low-latency financial transactions without reliance on trusted third parties or centralized clearing houses. By utilizing a optimized Proof-of-Work (PoW) consensus mechanism coupled with dual-layer SHA-256 cryptographic algorithms, AFIX establishes a self-regulating monetary framework that prioritizes security, accessibility, and long-term token scarcity.
 
-### 1. Prerequisites
-Ensure you have Python 3.8+ installed on your system or mobile device (Pydroid 3 / Termux).
+---
 
-### 2. Clone Repository
-```bash
-git clone [https://github.com/Ariobarzen1985/Affix.git](https://github.com/Ariobarzen1985/Affix.git)
-cd Affix
+## 1. Introduction
+The core architecture of traditional internet commerce relies almost exclusively on financial institutions acting as trusted third parties. While this system functions adequately for most transactions, it suffers from inherent weaknesses derived from trust-based models. Completely non-reversible transactions are not feasible, as financial intermediaries must mediate disputes, thereby elevating transaction costs and limiting minimum practical transaction sizes.
+
+AFIX Network solves these structural inefficiencies by replacing physical trust with cryptographic proof. The network implements a timestamped, immutable ledger of transactions secured through computational work, operating entirely under an autonomous execution framework.
+
+---
+
+## 2. Technical Architecture & Cryptography
+
+### 2.1 Block Structure & Dual SHA-256 Hashing
+Each block in the AFIX Network comprises a block header containing:
+1. **Block Index:** Incremental height within the global chain.
+2. **Timestamp:** Unix epoch time marking the block creation.
+3. **Previous Block Hash:** A 256-bit cryptographic link to the parent block.
+4. **Transactions Payload:** The structured sequence of validated state transfers.
+5. **Nonce:** A 32-bit arbitrary counter modified during Proof-of-Work computation.
+
