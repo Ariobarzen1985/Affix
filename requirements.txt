@@ -1,0 +1,3 @@
+# AFIX Core Standard Libraries
+# Note: Core uses built-in Python standard libraries (hashlib, json, time)
+
