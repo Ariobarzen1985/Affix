@@ -14,16 +14,16 @@ CORS(app)
 
 DB_FILE = "afix_blockchain.db"
 MASTER_TON_WALLET = "UQAQbW_kDwLvTaqnZsM6U8aU46oVA7vEDMbChOwTC719Hv4N"
-AFIX_PRICE_TOMAN = 10000  # هر AFIX معادل ۱۰,۰۰۰ تومان
-
-# آیدی تلگرامی ادمین کل (ثبت‌شده برای شما)
-ADMIN_TELEGRAM_IDS = ["8443938939"]
+AFIX_PRICE_TOMAN = 300000  # قیمت هر واحد AFIX معادل ۳۰۰,۰۰۰ تومان
+GENESIS_ADDRESS = "AFIX_GMN_f89637364a"
+GENESIS_INITIAL_BALANCE = 1100000.0
 
 def init_db():
-    """ساخت جداول پایگاه داده در صورت عدم وجود"""
+    """راه‌اندازی اولیه پایگاه داده و مقداردهی ولت جنسیس"""
     if sqlite3:
         conn = sqlite3.connect(DB_FILE)
         cursor = conn.cursor()
+        
         # جدول کیف پول کاربران
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS wallets (
@@ -32,6 +32,7 @@ def init_db():
                 last_mine_time TEXT
             )
         ''')
+        
         # جدول بازار خرید و فروش P2P
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS p2p_orders (
@@ -42,13 +43,20 @@ def init_db():
                 status TEXT
             )
         ''')
+        
+        # تزریق خودکار موجودی جنسیس در صورت عدم وجود
+        cursor.execute("SELECT balance FROM wallets WHERE address = ?", (GENESIS_ADDRESS,))
+        row = cursor.fetchone()
+        if not row:
+            cursor.execute("INSERT INTO wallets (balance, address) VALUES (?, ?)", (GENESIS_INITIAL_BALANCE, GENESIS_ADDRESS))
+        
         conn.commit()
         conn.close()
 
 init_db()
 
 def get_live_ton_price():
-    """دریافت قیمت لحظه‌ای تون"""
+    """دریافت قیمت لحظه‌ای تون برای اطلاعات صرافی"""
     try:
         response = requests.get("https://api.coingecko.com/api/v3/simple/price?ids=the-open-network&vs_currencies=usd", timeout=5)
         data = response.json()
@@ -57,9 +65,14 @@ def get_live_ton_price():
     except Exception:
         return 300000
 
-@app.route('/')
+@app.route('/', methods=['GET'])
 def home():
-    return jsonify({"node": "AFIX Network", "status": "Online", "version": "2.0-P2P"})
+    return jsonify({
+        "node": "AFIX Mainnet Node",
+        "status": "Online",
+        "version": "3.0-Standalone",
+        "afix_price_toman": AFIX_PRICE_TOMAN
+    })
 
 @app.route('/api/exchange/info', methods=['GET'])
 def exchange_info():
@@ -72,6 +85,7 @@ def exchange_info():
 
 @app.route('/api/balance', methods=['GET'])
 def get_balance():
+    """استعلام موجودی و ارزش تومانی هر آدرس"""
     address = request.args.get('address')
     if not address:
         return jsonify({"error": "Address required"}), 400
@@ -84,19 +98,27 @@ def get_balance():
     if row:
         balance = row[0]
     else:
+        # اگر آدرس جدید بود، به طور پیش‌فرض با صفر ثبت میشه
         cursor.execute("INSERT INTO wallets (balance, address) VALUES (?, ?)", (0.0, address))
         conn.commit()
         balance = 0.0
     conn.close()
-    return jsonify({"address": address, "balance": balance})
+
+    return jsonify({
+        "address": address,
+        "balance": balance,
+        "value_in_toman": balance * AFIX_PRICE_TOMAN
+    })
 
 @app.route('/api/mine', methods=['POST'])
 def mine_token():
-    """بخش استخراج روزانه نیم افیکس"""
-    data = request.json
+    """سیستم استخراج توکن از طریق درخواست کلاینت پایتونی"""
+    data = request.json or {}
     address = data.get('address')
     if not address:
         return jsonify({"error": "Address required"}), 400
+
+    reward_amount = 0.5  # پاداش هر بار استخراج
 
     conn = sqlite3.connect(DB_FILE)
     cursor = conn.cursor()
@@ -104,49 +126,58 @@ def mine_token():
     row = cursor.fetchone()
 
     if not row:
-        cursor.execute("INSERT INTO wallets (balance, address) VALUES (?, ?)", (0.5, address))
-        new_balance = 0.5
+        cursor.execute("INSERT INTO wallets (balance, address) VALUES (?, ?)", (reward_amount, address))
+        new_balance = reward_amount
     else:
-        new_balance = row[0] + 0.5
+        new_balance = row[0] + reward_amount
         cursor.execute("UPDATE wallets SET balance = ? WHERE address = ?", (new_balance, address))
     
     conn.commit()
     conn.close()
-    return jsonify({"status": "success", "message": "پاداش استخراج واریز شد", "balance": new_balance})
+    
+    return jsonify({
+        "status": "success",
+        "message": "پاداش استخراج با موفقیت به حساب شما واریز شد",
+        "balance": new_balance,
+        "reward": reward_amount
+    })
 
-# --- بخش بازار P2P (خرید و فروش مستقیم) ---
+# --- بازار P2P ---
 
 @app.route('/api/p2p/create_order', methods=['POST'])
 def create_p2p_order():
-    """کاربر یک سفارش فروش ثبت می‌کند تا دیگران بخرند"""
-    data = request.json
+    """ثبت سفارش فروش AFIX در بازار P2P"""
+    data = request.json or {}
     seller_address = data.get('address')
-    amount_afix = float(data.get('amount_afix', 0))
-
-    if amount_afix <= 0:
+    try:
+        amount_afix = float(data.get('amount_afix', 0))
+    except ValueError:
         return jsonify({"error": "مقدار نامعتبر است"}), 400
+
+    if amount_afix <= 0 or not seller_address:
+        return jsonify({"error": "اطلاعات ناقص یا نامعتبر است"}), 400
 
     conn = sqlite3.connect(DB_FILE)
     cursor = conn.cursor()
-    # بررسی موجودی فروشنده
+    
     cursor.execute("SELECT balance FROM wallets WHERE address = ?", (seller_address,))
     row = cursor.fetchone()
     if not row or row[0] < amount_afix:
         conn.close()
         return jsonify({"error": "موجودی کافی نیست"}), 400
 
-    # کسر موقت از موجودی فروشنده و ثبت در بازار P2P
+    # کسر موقت از موجودی و ثبت سفارش
     cursor.execute("UPDATE wallets SET balance = balance - ? WHERE address = ?", (amount_afix, seller_address))
     cursor.execute("INSERT INTO p2p_orders (seller_address, amount_afix, price_toman, status) VALUES (?, ?, ?, ?)",
                    (seller_address, amount_afix, amount_afix * AFIX_PRICE_TOMAN, "active"))
     conn.commit()
     conn.close()
 
-    return jsonify({"status": "success", "message": "سفارش فروش با موفقیت در بازار ثبت شد"})
+    return jsonify({"status": "success", "message": "سفارش فروش با موفقیت در بازار P2P ثبت شد"})
 
 @app.route('/api/p2p/orders', methods=['GET'])
 def get_p2p_orders():
-    """نمایش لیست سفارشات فعال برای خرید"""
+    """دریافت لیست سفارشات فعال بازار"""
     conn = sqlite3.connect(DB_FILE)
     cursor = conn.cursor()
     cursor.execute("SELECT order_id, seller_address, amount_afix, price_toman FROM p2p_orders WHERE status = 'active'")
@@ -163,16 +194,9 @@ def get_p2p_orders():
         })
     return jsonify({"orders": orders})
 
-# --- پنل ادمین ---
-
-@app.route('/api/admin/stats', methods=['GET'])
-def admin_stats():
-    """پنل مدیریت اختصاصی ادمین"""
-    admin_id = request.args.get('admin_id')
-    # امنیت: بررسی اینکه درخواست‌کننده واقعاً ادمین باشد
-    if admin_id not in ADMIN_TELEGRAM_IDS:
-        return jsonify({"error": "دسترسی غیرمجاز! شما ادمین نیستید."}), 403
-
+@app.route('/api/stats', methods=['GET'])
+def public_stats():
+    """آمار کلی شبکه"""
     conn = sqlite3.connect(DB_FILE)
     cursor = conn.cursor()
     cursor.execute("SELECT COUNT(*), SUM(balance) FROM wallets")
