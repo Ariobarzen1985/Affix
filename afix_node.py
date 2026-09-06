@@ -4,11 +4,9 @@ from afix_core import AfixMainnet, Wallet
 
 app = Flask(__name__)
 
-# راه‌اندازی شبکه AFIX با اتصال مستقیم به آدرس و جیمیل اختصاصی شما
-# (اینجا از آدرس ثابت شما یا ولت سیستمی برای نود استفاده می‌شود)
+# راه‌اندازی شبکه AFIX با اتصال به هسته اصلی
 CREATOR_GMAIL = "ariobarzan@gmail.com"
-# برای جلوگیری از تغییر ولت با هر بار ریستارت سرور، یک آدرس پایه تعریف می‌کنیم
-NETWORK_CREATOR_ADDRESS = "AFIX_GMN_ariobarzan_main_node"
+NETWORK_CREATOR_ADDRESS = "AFIX_ab773b6f7e43ac1e56bac9196b5b7f3950f2d"
 blockchain = AfixMainnet(creator_wallet_address=NETWORK_CREATOR_ADDRESS, creator_email=CREATOR_GMAIL)
 
 @app.route('/', methods=['GET'])
@@ -23,7 +21,6 @@ def home():
 
 @app.route('/chain', methods=['GET'])
 def get_chain():
-    """دریافت کل تاریخچه بلاک‌چین واقعی AFIX"""
     chain_data = []
     for block in blockchain.chain:
         block_data = {
@@ -44,7 +41,7 @@ def get_chain():
 
 @app.route('/balance/<address>', methods=['GET'])
 def check_balance(address):
-    """بررسی موجودی واقعی هر آدرس از روی دفتر کل شبکه"""
+    """مسیر استعلام موجودی واقعی هر آدرس از روی بلاک‌چین"""
     balance = blockchain.get_balance(address)
     return jsonify({
         "address": address,
@@ -53,7 +50,6 @@ def check_balance(address):
 
 @app.route('/transactions/new', methods=['POST'])
 def new_transaction():
-    """ثبت تراکنش جدید با رعایت قوانین امنیتی و ضدتقلب"""
     values = request.get_json()
     if not values:
         return jsonify({"error": "داده‌ای ارسال نشده است"}), 400
@@ -62,7 +58,6 @@ def new_transaction():
     if not all(k in values for k in required):
         return jsonify({"error": "اطلاعات تراکنش ناقص است"}), 400
 
-    # دریافت امضا و کلید عمومی (اگر تراکنش غیرسیستمی باشد)
     signature = values.get('signature')
     public_key_hex = values.get('public_key_hex')
 
@@ -75,16 +70,13 @@ def new_transaction():
     )
 
     if not success:
-        return jsonify({"error": "تراکنش رد شد (خطای موجودی، صندوق قفل‌شده یا نامعتبر بودن امضا)"}), 400
+        return jsonify({"error": "تراکنش رد شد"}), 400
 
     return jsonify({"message": "تراکنش با موفقیت به صف انتظار اضافه شد"}), 201
 
 @app.route('/mine', methods=['GET'])
 def mine():
-    """استخراج بلاک جدید و واریز پاداش به ماینر"""
-    # پاداش استخراج به آدرس پیش‌فرض سازنده نود واریز می‌شود
     miner_address = NETWORK_CREATOR_ADDRESS
-    
     new_block, reward = blockchain.mine_block(miner_address)
     
     response = {
