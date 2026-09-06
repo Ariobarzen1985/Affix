@@ -1,1 +1,1 @@
-web: python server.py
+web: python afix_node.py
