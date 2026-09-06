@@ -1,74 +1,104 @@
-import hashlib
-import json
 import os
-import time
 from flask import Flask, jsonify, request
+from afix_core import AfixMainnet, Wallet
 
 app = Flask(__name__)
 
-# ساختار اولیه بلاک‌چین AFIX با جنسیس بلاک
-blockchain = [{
-    "index": 0,
-    "timestamp": time.time(),
-    "transactions": [],
-    "nonce": 0,
-    "previous_hash": "0" * 64,
-    "hash": "8f3a2b1c9d4e5f6a7b8c9d0e1f2a3b"
-}]
-
-DIFFICULTY = 3
+# راه‌اندازی شبکه AFIX با اتصال مستقیم به آدرس و جیمیل اختصاصی شما
+# (اینجا از آدرس ثابت شما یا ولت سیستمی برای نود استفاده می‌شود)
+CREATOR_GMAIL = "ariobarzan@gmail.com"
+# برای جلوگیری از تغییر ولت با هر بار ریستارت سرور، یک آدرس پایه تعریف می‌کنیم
+NETWORK_CREATOR_ADDRESS = "AFIX_GMN_ariobarzan_main_node"
+blockchain = AfixMainnet(creator_wallet_address=NETWORK_CREATOR_ADDRESS, creator_email=CREATOR_GMAIL)
 
 @app.route('/', methods=['GET'])
 def home():
-    return jsonify({"status": "AFIX Node is online", "height": len(blockchain)}), 200
+    return jsonify({
+        "status": "AFIX Mainnet Node is online",
+        "creator": "Ariobarzan",
+        "chain_height": len(blockchain.chain),
+        "total_minted": blockchain.total_minted,
+        "max_supply": blockchain.MAX_SUPPLY
+    }), 200
 
 @app.route('/chain', methods=['GET'])
 def get_chain():
+    """دریافت کل تاریخچه بلاک‌چین واقعی AFIX"""
+    chain_data = []
+    for block in blockchain.chain:
+        block_data = {
+            "index": block.index,
+            "timestamp": block.timestamp,
+            "transactions": block.transactions,
+            "previous_hash": block.previous_hash,
+            "nonce": block.nonce,
+            "hash": block.hash
+        }
+        chain_data.append(block_data)
+    
     return jsonify({
-        "chain": blockchain,
-        "length": len(blockchain),
-        "difficulty": DIFFICULTY
+        "length": len(chain_data),
+        "chain": chain_data,
+        "difficulty": blockchain.difficulty
     }), 200
 
-@app.route('/mine', methods=['POST'])
-def mine_block():
-    data = request.get_json()
-    if not data:
-        return jsonify({"error": "Invalid data format"}), 400
+@app.route('/balance/<address>', methods=['GET'])
+def check_balance(address):
+    """بررسی موجودی واقعی هر آدرس از روی دفتر کل شبکه"""
+    balance = blockchain.get_balance(address)
+    return jsonify({
+        "address": address,
+        "balance": balance
+    }), 200
+
+@app.route('/transactions/new', methods=['POST'])
+def new_transaction():
+    """ثبت تراکنش جدید با رعایت قوانین امنیتی و ضدتقلب"""
+    values = request.get_json()
+    if not values:
+        return jsonify({"error": "داده‌ای ارسال نشده است"}), 400
+
+    required = ['sender', 'recipient', 'amount']
+    if not all(k in values for k in required):
+        return jsonify({"error": "اطلاعات تراکنش ناقص است"}), 400
+
+    # دریافت امضا و کلید عمومی (اگر تراکنش غیرسیستمی باشد)
+    signature = values.get('signature')
+    public_key_hex = values.get('public_key_hex')
+
+    success = blockchain.add_transaction(
+        sender=values['sender'],
+        recipient=values['recipient'],
+        amount=values['amount'],
+        signature=signature,
+        public_key_hex=public_key_hex
+    )
+
+    if not success:
+        return jsonify({"error": "تراکنش رد شد (خطای موجودی، صندوق قفل‌شده یا نامعتبر بودن امضا)"}), 400
+
+    return jsonify({"message": "تراکنش با موفقیت به صف انتظار اضافه شد"}), 201
+
+@app.route('/mine', methods=['GET'])
+def mine():
+    """استخراج بلاک جدید و واریز پاداش به ماینر"""
+    # پاداش استخراج به آدرس پیش‌فرض سازنده نود واریز می‌شود
+    miner_address = NETWORK_CREATOR_ADDRESS
     
-    miner_address = data.get("miner_address")
-    block_index = data.get("block_index")
-    nonce = data.get("nonce")
-    block_hash = data.get("hash")
+    new_block, reward = blockchain.mine_block(miner_address)
     
-    if not all([miner_address, block_index, nonce, block_hash]):
-        return jsonify({"error": "Missing parameters"}), 400
-        
-    previous_block = blockchain[-1]
-    
-    # بررسی صحت شماره بلاک و هش قبلی
-    if block_index != previous_block["index"] + 1:
-        return jsonify({"error": "Invalid block index"}), 400
-        
-    data_string = f"AFIX_{block_index}_{previous_block['hash']}_{nonce}_{miner_address}"
-    calculated_hash = hashlib.sha256(data_string.encode()).hexdigest()
-    
-    # اعتبارسنجی اثبات کار (PoW)
-    if calculated_hash.startswith("0" * DIFFICULTY) and calculated_hash == block_hash:
-        new_block = {
-            "index": block_index,
-            "timestamp": time.time(),
-            "transactions": [{"to": miner_address, "reward": 50}],
-            "nonce": nonce,
-            "previous_hash": previous_block['hash'],
-            "hash": block_hash
-        }
-        blockchain.append(new_block)
-        return jsonify({"message": "Block added successfully!", "block": new_block}), 200
-    
-    return jsonify({"error": "Invalid block hash or difficulty mismatch"}), 400
+    response = {
+        "message": "بلاک جدید با موفقیت استخراج شد!",
+        "index": new_block.index,
+        "transactions": new_block.transactions,
+        "nonce": new_block.nonce,
+        "previous_hash": new_block.previous_hash,
+        "hash": new_block.hash,
+        "reward_given": reward,
+        "total_minted": blockchain.total_minted
+    }
+    return jsonify(response), 200
 
 if __name__ == '__main__':
-    # استفاده از پورت داینامیک Railway
     port = int(os.environ.get('PORT', 8080))
     app.run(host='0.0.0.0', port=port)
